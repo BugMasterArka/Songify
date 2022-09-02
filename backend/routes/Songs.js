@@ -29,31 +29,75 @@ router.post('/addsong:playlist',upload.single('file'), async (req,res)=>{
         if(!mimeCheck){
             res.status(400).json({error: "filetype not supported"});
         }
-        let song;
-        if(req.params.playlist==='defaultList'){
-            song = new Song({
-                name: req.file.originalname,
-                fileId: req.file._id
-            });
+        // let song;
+        // if(req.params.playlist==='defaultList'){
+        //     song = new Song({
+        //         name: req.file.originalname,
+        //         fileId: req.file._id
+        //     });
+        // }else{
+        //     let playlist = await PlayList.findOne({name: req.params.playlist});
+        //     let savedList;
+        //     if(!playlist){
+        //         res.status(404).send("Playlist not found");
+        //     }else{
+        //         savedList = await PlayList.findByIdAndUpdate(playlist._id,{$set: {n_songs: playlist.n_songs+1}});
+        //     }
+        //     song = new Song({
+        //         name: req.file.originalname,
+        //         fileId: req.file._id,
+        //         playlist: req.params.playlist,
+        //         playlistId: savedList._id
+        //     });
+        // }
+
+        let song = await Song.findOne({name: req.file.originalname});
+
+        if(!song){
+            if(req.params.playlist==='defaultList'){
+                song = new Song({
+                    name: req.file.originalname,
+                    liked: true,
+                    fileId: req.file.id,
+                    playlistId: []
+                });
+            }else{
+                let playlist = await PlayList.findOne({name: req.params.playlist});
+                
+                if(!playlist){
+                    res.status(404).send("Playlist not found");
+                }
+
+                let savedList = await PlayList.findByIdAndUpdate(playlist._id,{$set: {n_songs: playlist.n_songs+1}});
+
+                song = new Song({
+                    name: req.file.originalname,
+                    liked: true,
+                    fileId: req.file.id,
+                    playlistId: [savedList._id]
+                });
+            }
+
+            song = await song.save();
+
+            res.send(song);
         }else{
             let playlist = await PlayList.findOne({name: req.params.playlist});
-            let savedList;
+
             if(!playlist){
                 res.status(404).send("Playlist not found");
-            }else{
-                savedList = await PlayList.findByIdAndUpdate(playlist._id,{$set: {n_songs: playlist.n_songs+1}});
             }
-            song = new Song({
-                name: req.file.originalname,
-                fileId: req.file._id,
-                playlist: req.params.playlist,
-                playlistId: savedList._id
-            });
+
+            let savedList = await PlayList.findByIdAndUpdate(playlist._id,{$set: {n_songs: playlist.n_songs+1}});
+
+            let newId = [savedList._id];
+            let newIdArray = song.playlistId.concat(newId);
+
+            song = await Song.findByIdAndUpdate(song._id,{$set: {playlistId: newIdArray}});
+
+            res.send(song);
         }
 
-        let savedSong = await song.save();
-
-        res.send(savedSong);
     }catch(error){
         console.log(error);
         res.status(500).json({error: "Internal Server Error"});

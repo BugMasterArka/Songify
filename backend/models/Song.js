@@ -3,16 +3,17 @@ const mongoose = require('mongoose');
 const songSchema = new mongoose.Schema({
     name: {
         type: String,
+        required: true,
+        unique: true
+    },
+    liked: {
+        type: Boolean,
         required: true
     },
-    playlist: {
-        type: String,
-        default: "Liked Songs"
-    },
-    playlistId: {
+    playlistId: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'playlist'
-    },
+    }],
     fileId:{
         type: mongoose.Schema.Types.ObjectId,
         required: true
