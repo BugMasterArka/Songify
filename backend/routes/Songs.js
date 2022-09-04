@@ -170,7 +170,8 @@ router.delete('/deletesong/:id', async (req,res)=>{
     }
 });
 
-// route DELETE /api/songs/deleteone/:id
+// route DELETE /api/songs/deleteone/:info
+//          info = JSON.stringify({songId,playListId})
 // delete particular song from a playlist
 
 router.delete('/deleteone/:info', async (req,res)=>{
