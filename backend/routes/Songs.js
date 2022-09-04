@@ -3,8 +3,9 @@ const express = require('express');
 const router = express.Router();
 const Song = require('../models/Song');
 const PlayList = require('../models/PlayList');
-const upload = require('../middleware/Storage');
+const {upload,gfs,gridfsBucket} = require('../middleware/Storage');
 const {detect} = require('detect-browser');
+const { findOne } = require('../models/PlayList');
 
 // route POST /api/songs/addsong
 // adds a new song to the chosen playlist (to liked songs if playlist given as "defaultList")
@@ -104,5 +105,103 @@ router.post('/addsong:playlist',upload.single('file'), async (req,res)=>{
     }
 });
 
-// router 
+// route GET /api/songs/getallliked
+// gets all the likeed songs from the database
 
+router.get('/getallliked', async (req,res)=>{
+    try{
+        const likedSongs  = await Song.find({liked: true});
+        res.json(likedSongs);
+    }catch(error){
+        console.log(error);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+// route GET /api/songs/getsongs/:id
+// gets all the songs of a particular playlist
+
+router.get('/getsongs/:id', async (req,res)=>{
+    try{
+        let list = await PlayList.findOne({_id: req.params.id});
+        if(!list){
+            return res.status(404).send("Playlist not found");
+        }
+        let listSongs = [];
+        const songs = await Song.find();
+        if(songs || songs.length!==0){
+            songs.map((song)=>{
+                if(song.playlistId.includes(req.params.id)){
+                    listSongs.push(song);
+                }
+            });
+        }
+        res.json(songs);
+    }catch(error){
+        console.log(error);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+// route DELETE /api/songs/deletesong/:id
+// delete particular song entirely from all databases
+
+router.delete('/deletesong/:id', async (req,res)=>{
+    try{
+        let song = await Song.findById(req.params.id);
+
+        if(!song){
+            return res.status(404).send("Song not found");
+        }
+
+        gfs.files.findOne({_id: mongoose.Types.ObjectId(song.fileId)},(err,file)=>{
+            if(!file){
+                return res.status(404).send("No file exists");
+            }
+            gridfsBucket.delete(file._id);
+        });
+
+        song = await Song.findByIdAndDelete(req.params.id);
+
+        res.send(song);
+    }catch(error){
+        console.log(error);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+// route DELETE /api/songs/deleteone/:id
+// delete particular song from a playlist
+
+router.delete('/deleteone/:info', async (req,res)=>{
+    try{
+        const data = JSON.parse(info);
+        const songId = data.songId;
+        const listId = data.playListId;
+
+        let song = await findOne({_id: songId});
+        if(!song){
+            return res.status(404).send("Song not found");
+        }
+
+        let playList = await PlayList.findOne({_id: listId});
+        if(!playList){
+            return res.status(404).send("Playlist not found");
+        }
+
+        let listIndex = song.playListId.findIndex(listId);
+        if(listIndex===-1){
+            return res.status(404).send("Song not in playlist");
+        }
+        let newList = song.playListId.splice(listIndex,1);
+
+        song = await Song.findByIdAndUpdate(songId,{$set: {playlistId: newList}});
+
+        playList = await PlayList.findByIdAndUpdate(listId,{$set: {n_songs: playList.n_songs-1}});
+
+        res.json({song,playList});
+    }catch(error){
+        console.log(error);
+        res.status(500).send("Internal server error");
+    }
+});
